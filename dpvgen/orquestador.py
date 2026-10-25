@@ -16,6 +16,10 @@ C = SimpleNamespace(
     # el refinado 4x tarda ~20 veces una simulacion normal; con True solo el bloque 0
     # de cada familia-etapa lo lleva, que basta para el piso de la Ec. 21
     REFINAR_SOLO_BLOQUE0=False,
+    # nodos de la malla base por familia como multiplo de la de r04 ({"E2": 4} da 720 nodos
+    # graduados en vez de 180); el archivo lleva el sufijo _m<factor> y el refinado 4x se
+    # hace sobre esa malla
+    FACTOR_MALLA_BASE={},
     PLATAFORMA="cpu", N_TRABAJADORES=None, PRESUPUESTO_HORAS=11.0,
     TEST_FAMILIA="E2", TEST_ETAPA="B", N_TEST_SIMS=8,
     DELTAPV_COMMIT="f874e24", DIR_SALIDA=".",
@@ -193,12 +197,15 @@ def ejecutar_bloque(familia, etapa, bloque, presupuesto_s=None):
     """Produce un bloque de la secuencia Sobol fija de una familia-etapa en su propio .h5.
     Un bloque cortado por el presupuesto queda con lo hecho y se repite entero en otra
     sesion; al unir bloques, un indice repetido conserva la ultima corrida."""
-    nombre = f"dpv_{familia}{etapa}_b{bloque:03d}.h5"
+    factor = int(C.FACTOR_MALLA_BASE.get(familia, 1))
+    sufijo = f"_m{factor}" if factor != 1 else ""
+    nombre = f"dpv_{familia}{etapa}{sufijo}_b{bloque:03d}.h5"
     ruta = os.path.join(C.DIR_SALIDA, nombre)
     fraccion = 0.0 if (C.REFINAR_SOLO_BLOQUE0 and bloque > 0) else C.FRACCION_REFINADO
-    tareas = dpvgen.plan_de_bloque(familia, etapa, bloque, fraccion, dpvgen.TAM_BLOQUE)
+    tareas = dpvgen.plan_de_bloque(familia, etapa, bloque, fraccion, dpvgen.TAM_BLOQUE, factor)
     f = abrir_h5(ruta, familia, etapa, dpvgen.TAM_BLOQUE)
     f.attrs["bloque"] = bloque
+    f.attrs["factor_malla_base"] = factor
     f.attrs["tam_bloque"] = dpvgen.TAM_BLOQUE
     f.attrs["indices_sobol"] = [bloque * dpvgen.TAM_BLOQUE, (bloque + 1) * dpvgen.TAM_BLOQUE]
     ya = hechas(f)

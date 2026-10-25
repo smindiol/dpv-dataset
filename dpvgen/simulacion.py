@@ -116,11 +116,13 @@ def _sobol(familia, etapa):
     return qmc.Sobol(d=d, scramble=True, seed=SEMILLAS_SOBOL[familia + etapa]).random_base2(m=M_SOBOL)
 
 
-def plan_de_bloque(familia, etapa, bloque, fraccion_refinado=0.05, tam=None):
+def plan_de_bloque(familia, etapa, bloque, fraccion_refinado=0.05, tam=None, factor_base=1):
     """Tareas del bloque `bloque` de una familia-etapa: indices Sobol globales
     [bloque*tam, (bloque+1)*tam). Bloques distintos nunca comparten dispositivos, asi
     que cada sesion nueva suma datos sin repetir. Las 2^d esquinas van solo en el bloque 0
-    (indices negativos -1..-2^d); el 5 % refinado (4x nodos) se elige dentro del bloque."""
+    (indices negativos -1..-2^d); el 5 % refinado (4x nodos) se elige dentro del bloque.
+    factor_base multiplica los nodos de la malla de todo el bloque; el refinado lleva
+    4 veces esa malla, como pide la Ec. 21."""
     tam = TAM_BLOQUE if tam is None else tam
     act = parametros_activos(familia, etapa)
     d = len(act)
@@ -128,15 +130,16 @@ def plan_de_bloque(familia, etapa, bloque, fraccion_refinado=0.05, tam=None):
         raise ValueError(f"bloque {bloque} fuera de la secuencia (0..{(2 ** M_SOBOL) // tam - 1})")
     u = _sobol(familia, etapa)
     i0 = bloque * tam
-    tareas = [{"idx": i0 + i, "tipo": "sobol", "u": u[i0 + i].tolist(), "factor_malla": 1}
+    tareas = [{"idx": i0 + i, "tipo": "sobol", "u": u[i0 + i].tolist(), "factor_malla": factor_base}
               for i in range(tam)]
     if bloque == 0:
         for c in range(2 ** d):
             tareas.append({"idx": -(c + 1), "tipo": "esquina",
-                           "u": [float((c >> j) & 1) for j in range(d)], "factor_malla": 1})
+                           "u": [float((c >> j) & 1) for j in range(d)], "factor_malla": factor_base})
     rng = np.random.default_rng(SEMILLAS_SOBOL[familia + etapa] * 1000 + bloque)
     for i in sorted(rng.choice(tam, size=int(round(fraccion_refinado * tam)), replace=False).tolist()):
-        tareas.append({"idx": i0 + i, "tipo": "refinado", "u": u[i0 + i].tolist(), "factor_malla": 4})
+        tareas.append({"idx": i0 + i, "tipo": "refinado", "u": u[i0 + i].tolist(),
+                       "factor_malla": 4 * factor_base})
     for t in tareas:
         t["familia"], t["etapa"] = familia, etapa
         t["xi"] = xi_desde_unitario(familia, etapa, t["u"])
@@ -320,7 +323,11 @@ def construir(familia, xi, factor_malla=1):
         t1, t2 = xi["L_CdS"], xi["L_CdTe"]
         import jax.numpy as jnp
         grid = jnp.asarray(_malla_ex2(t1, t2, factor_malla))
-        des = dpv.make_design(n_points=int(grid.size), Ls=[t1, t2], mats=[CdS, CdTe],
+        # make_design reescala la malla y compara x <= inicio + espesor; segun el redondeo
+        # de jax el ultimo nodo (x = L) puede quedar sin material (eps = Nc = 0 -> NaN en
+        # el equilibrio). Alargar la ultima capa 1e-9 relativo no cambia ninguna asignacion
+        # que ya funcionaba y garantiza la del ultimo nodo.
+        des = dpv.make_design(n_points=int(grid.size), Ls=[t1, t2 * (1 + 1e-9)], mats=[CdS, CdTe],
                               Ns=[xi["Nd_CdS"], -xi["Na_CdTe"]], grid=grid,
                               Snl=1.16e7, Snr=1.16e7, Spl=1.16e7, Spr=1.16e7)
         ls = espectro_estandar() if familia == "E2" else espectro_lds(xi["eta_PL"])
@@ -412,6 +419,9 @@ def simular(tarea):
               "estado": "ok", "mensaje": "", "plataforma": PLATAFORMA, "pid": os.getpid()}
     try:
         des, ls = construir(tarea["familia"], tarea["xi"], tarea["factor_malla"])
+        sin_material = np.where(np.asarray(des.eps) == 0)[0]
+        if sin_material.size:
+            raise ValueError(f"nodos de la malla sin material: {sin_material[:10].tolist()}")
         res = dpv.simulate(des, ls, verbose=True)
         t_fin = time.time()
         eq, pasos = _analizar_log(_CAPTURA.eventos, t_fin)
@@ -445,7 +455,7 @@ def simular(tarea):
             "seg_equilibrio": eq["seg"],
         })
 
-        guardar_perfiles = tarea["factor_malla"] == 1
+        guardar_perfiles = tarea["tipo"] != "refinado"
         if guardar_perfiles:
             cell = res["cell"]
             pots = res["pots"]
