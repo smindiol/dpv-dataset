@@ -413,3 +413,73 @@ def ejecutar_unidades(unidades):
         rutas.append(ejecutar_produccion())
     C.PRESUPUESTO_HORAS = total
     return rutas
+
+
+# -----------------------------------------------------------------------------
+# TEST RAPIDO: una plataforma por corrida, 20 variaciones, veredicto
+# -----------------------------------------------------------------------------
+def ejecutar_test_rapido(plataforma, n_variaciones=20):
+    """Mide UNA plataforma: 4 nominales (correccion) y n_variaciones Sobol repartidas entre
+    E1B-E4B, con todos los procesos que esa plataforma admite. Escribe test_<plataforma>.json
+    y, si los nominales resuelven, shard.json (evidencia del ensayo)."""
+    t0 = time.time()
+    ng = n_gpus_visibles()
+    if plataforma == "gpu" and ng == 0:
+        raise RuntimeError("bandera 'gpu' pero la sesion no tiene GPU")
+    nw = C.N_TRABAJADORES or (os.cpu_count() if plataforma == "cpu" else ng)
+    print(f"TEST RAPIDO plataforma={plataforma} procesos={nw} | CPUs={os.cpu_count()} GPUs={ng}", flush=True)
+    with crear_pool(plataforma, 1) as pool:
+        info = pool.submit(dpvgen.info_trabajador).result()
+    print("  jax:", info["jax"], "| backend:", info["backend"], "|", info["dispositivos"], flush=True)
+
+    nominales = [{"idx": 0, "tipo": "sobol", "familia": fam, "etapa": "B", "u": [],
+                  "xi": dpvgen.xi_nominal(fam), "factor_malla": 1} for fam in ("E1", "E2", "E3", "E4")]
+    nom, _ = _uno(plataforma, nominales, min(nw, 4))
+    for r in sorted(nom, key=lambda r: r["familia"]):
+        print(f"  nominal {r['familia']}: {r['estado']:13s} PCE={100*r.get('eff', np.nan):.4f} % "
+              f"Voc={r.get('voc', np.nan):.4f} V n_V={r.get('n_voltajes', 0)} t={r['seg_total']:.1f} s "
+              f"{r['mensaje'][:80]}", flush=True)
+
+    por_familia = n_variaciones // 4
+    tareas = []
+    for fam in ("E1", "E2", "E3", "E4"):
+        tareas += dpvgen.plan_de_tareas(fam, "B", C.N_TOTAL, C.FRACCION_REFINADO)[:por_familia]
+    t1 = time.time()
+    res, dt = _uno(plataforma, tareas, nw)
+    # La primera simulacion de cada proceso con cada tamano de malla incluye la compilacion
+    # JIT de jax (E1/E3: 500 nodos uniformes; E2/E4: 180 de la malla de ex2); el resto es regimen.
+    malla = {"E1": 500, "E3": 500, "E2": 180, "E4": 180}
+    vistos, regimen = set(), {}
+    for r in sorted(res, key=lambda r: r.get("t_fin", 0.0)):
+        clave = (r["pid"], malla[r["familia"]])
+        if clave in vistos:
+            regimen.setdefault(r["familia"], []).append(r["seg_total"])
+        vistos.add(clave)
+    seg = {fam: float(np.median(v)) for fam, v in regimen.items() if v}
+    sims_h = {fam: 3600 * nw / s for fam, s in seg.items()}
+    estados = Counter(r["estado"] for r in res)
+    sims_fe = C.N_TOTAL * (1 + C.FRACCION_REFINADO * 4) + 32
+    horas = {f"{fam}B": sims_fe / v for fam, v in sims_h.items()}
+    print(f"  {len(res)} variaciones en {dt:.0f} s de reloj ({3600*len(res)/dt:.0f} sims/h con JIT incluido)"
+          f" | estados {dict(estados)}", flush=True)
+    for fam in sorted(seg):
+        print(f"  {fam}B: {seg[fam]:.2f} s/sim por proceso -> {sims_h[fam]:.0f} sims/h con {nw} procesos"
+              f" -> ~{horas[fam + 'B']:.1f} h por familia-etapa", flush=True)
+
+    fallos = [r["familia"] for r in nom if r["estado"] != "ok"]
+    resumen = {"plataforma": plataforma, "procesos": nw, "cpus": os.cpu_count(), "gpus": ng,
+               "jax": info, "nominales": {r["familia"]: {"estado": r["estado"], "eff": r.get("eff"),
+                                                         "voc": r.get("voc"), "seg": r["seg_total"]} for r in nom},
+               "estados_variaciones": dict(estados), "seg_por_sim_regimen": seg,
+               "sims_por_hora": sims_h, "horas_por_familia_etapa": horas,
+               "reloj_variaciones_s": dt, "reloj_total_s": time.time() - t0,
+               "veredicto": "ok" if not fallos else f"fallan nominales {fallos}"}
+    with open(os.path.join(C.DIR_SALIDA, f"test_{plataforma}.json"), "w") as fh:
+        json.dump(resumen, fh, indent=1, default=float)
+    if not fallos:
+        with open(os.path.join(C.DIR_SALIDA, "shard.json"), "w") as fh:
+            json.dump({"evidence": {"commit": os.environ.get("FORGE_CLONE_COMMIT"),
+                                    "plataforma": plataforma}, "test": resumen}, fh, indent=1, default=float)
+    print(f"VEREDICTO {plataforma}: {resumen['veredicto']}; tiempo total {resumen['reloj_total_s']/60:.1f} min",
+          flush=True)
+    return resumen

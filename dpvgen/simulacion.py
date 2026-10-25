@@ -169,8 +169,14 @@ def init_trabajador(plataforma="cpu", n_gpus=0, contador=None, hilos=1):
                 contador.value += 1
             os.environ["CUDA_VISIBLE_DEVICES"] = str(k % n_gpus)
     PLATAFORMA = plataforma
-    import deltapv as dpv
-    import deltapv.current  # noqa: F401  (Jn, Jp)
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+    # deltapv imprime su banner ASCII en cada import; con un proceso por nucleo eso
+    # inunda la salida del cuaderno hasta que Kaggle no puede guardarlo. Se descarta.
+    import contextlib
+    import io
+    with contextlib.redirect_stdout(io.StringIO()):
+        import deltapv as dpv
+        import deltapv.current  # noqa: F401  (Jn, Jp)
     DPV = dpv
     lg = logging.getLogger("deltapv")
     _CAPTURA = _Captura()
@@ -432,4 +438,5 @@ def simular(tarea):
         salida["estado"] = "error"
         salida["mensaje"] = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}"
     salida["seg_total"] = time.time() - t_ini
+    salida["t_fin"] = time.time()
     return salida
