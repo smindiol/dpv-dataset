@@ -1,0 +1,9 @@
+# Productos de ejecucion: el dataset no se versiona (varios GB por familia-etapa)
+*.h5
+salidas/
+# Estado local de /remote-execution (registro, resultados descargados, cuarentena)
+.remote-execution/
+**/Results/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
