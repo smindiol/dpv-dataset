@@ -250,6 +250,9 @@ def parsear_unidad(u):
 def ejecutar_unidades(unidades):
     """Produce las unidades en orden dentro del presupuesto total de la sesion y deja
     resumen_sesion.json con lo que quedo completo y lo que hay que repetir."""
+    # una unidad del runner es una sesion de Kaggle; puede empaquetar varios
+    # bloques unidos con "+" ("E1A-b000+E1A-b001"), que se producen en orden
+    unidades = [b for u in unidades for b in u.split("+")]
     t0 = time.time()
     hechas_u = []
     for u in unidades:
