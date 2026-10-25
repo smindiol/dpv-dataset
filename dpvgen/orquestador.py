@@ -13,6 +13,9 @@ from dpvgen import simulacion as dpvgen
 # Configuracion de la corrida; el cuaderno la fija con configurar().
 C = SimpleNamespace(
     FAMILIA="E1", ETAPA="A", N_TOTAL=12_500, FRACCION_REFINADO=0.05,
+    # el refinado 4x tarda ~20 veces una simulacion normal; con True solo el bloque 0
+    # de cada familia-etapa lo lleva, que basta para el piso de la Ec. 21
+    REFINAR_SOLO_BLOQUE0=False,
     PLATAFORMA="cpu", N_TRABAJADORES=None, PRESUPUESTO_HORAS=11.0,
     TEST_FAMILIA="E2", TEST_ETAPA="B", N_TEST_SIMS=8,
     DELTAPV_COMMIT="f874e24", DIR_SALIDA=".",
@@ -192,7 +195,8 @@ def ejecutar_bloque(familia, etapa, bloque, presupuesto_s=None):
     sesion; al unir bloques, un indice repetido conserva la ultima corrida."""
     nombre = f"dpv_{familia}{etapa}_b{bloque:03d}.h5"
     ruta = os.path.join(C.DIR_SALIDA, nombre)
-    tareas = dpvgen.plan_de_bloque(familia, etapa, bloque, C.FRACCION_REFINADO, dpvgen.TAM_BLOQUE)
+    fraccion = 0.0 if (C.REFINAR_SOLO_BLOQUE0 and bloque > 0) else C.FRACCION_REFINADO
+    tareas = dpvgen.plan_de_bloque(familia, etapa, bloque, fraccion, dpvgen.TAM_BLOQUE)
     f = abrir_h5(ruta, familia, etapa, dpvgen.TAM_BLOQUE)
     f.attrs["bloque"] = bloque
     f.attrs["tam_bloque"] = dpvgen.TAM_BLOQUE
