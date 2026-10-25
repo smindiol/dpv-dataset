@@ -54,7 +54,9 @@ FAMILIAS = {
             # r04 escribe 1.9e18, pero Nv del HTM de x0 es 10**18.2718 = 1.87e18; se usa Nv
             # para respetar la regla de no degeneracion de la propia r04.
             ("Na_HTM", "log", 1e17, 1.8698e18, 4.4e17, "A", "cota inferior de psc.py; cota superior Nv del HTM (1.87e18)"),
-            ("L_abs", "lin", 170e-7, 650e-7, 350e-7, "B", "Perovskite Database v1.0.1, p5 a p95"),
+            # Nominal 500 nm y no la mediana de 350 nm: con 60/350/100 nm el equilibrio de dPV
+            # falla en el 100 % de la etapa A (16/16, medido 2026-10-24); 60/500/100 converge 8/8.
+            ("L_abs", "lin", 170e-7, 650e-7, 500e-7, "B", "Perovskite Database v1.0.1, p5 a p95"),
             ("L_ETL", "lin", 20e-7, 550e-7, 60e-7, "B", "Perovskite Database v1.0.1, p5 a p95"),
             ("L_HTL", "lin", 15e-7, 300e-7, 100e-7, "B", "Perovskite Database v1.0.1, p5 a p95"),
         ],
@@ -101,6 +103,44 @@ def xi_desde_unitario(familia, etapa, u):
 
 def xi_nominal(familia):
     return {p[0]: p[4] for p in FAMILIAS[familia]["parametros"]}
+
+
+TAM_BLOQUE = 1024           # dispositivos por bloque (2^10: cada bloque alineado es una red Sobol)
+M_SOBOL = 17                # secuencia de 2^17 = 131 072 dispositivos por familia-etapa
+
+
+def _sobol(familia, etapa):
+    """La secuencia Sobol completa y fija de una familia-etapa (misma semilla siempre)."""
+    from scipy.stats import qmc
+    d = len(parametros_activos(familia, etapa))
+    return qmc.Sobol(d=d, scramble=True, seed=SEMILLAS_SOBOL[familia + etapa]).random_base2(m=M_SOBOL)
+
+
+def plan_de_bloque(familia, etapa, bloque, fraccion_refinado=0.05, tam=None):
+    """Tareas del bloque `bloque` de una familia-etapa: indices Sobol globales
+    [bloque*tam, (bloque+1)*tam). Bloques distintos nunca comparten dispositivos, asi
+    que cada sesion nueva suma datos sin repetir. Las 2^d esquinas van solo en el bloque 0
+    (indices negativos -1..-2^d); el 5 % refinado (4x nodos) se elige dentro del bloque."""
+    tam = TAM_BLOQUE if tam is None else tam
+    act = parametros_activos(familia, etapa)
+    d = len(act)
+    if not 0 <= bloque < (2 ** M_SOBOL) // tam:
+        raise ValueError(f"bloque {bloque} fuera de la secuencia (0..{(2 ** M_SOBOL) // tam - 1})")
+    u = _sobol(familia, etapa)
+    i0 = bloque * tam
+    tareas = [{"idx": i0 + i, "tipo": "sobol", "u": u[i0 + i].tolist(), "factor_malla": 1}
+              for i in range(tam)]
+    if bloque == 0:
+        for c in range(2 ** d):
+            tareas.append({"idx": -(c + 1), "tipo": "esquina",
+                           "u": [float((c >> j) & 1) for j in range(d)], "factor_malla": 1})
+    rng = np.random.default_rng(SEMILLAS_SOBOL[familia + etapa] * 1000 + bloque)
+    for i in sorted(rng.choice(tam, size=int(round(fraccion_refinado * tam)), replace=False).tolist()):
+        tareas.append({"idx": i0 + i, "tipo": "refinado", "u": u[i0 + i].tolist(), "factor_malla": 4})
+    for t in tareas:
+        t["familia"], t["etapa"] = familia, etapa
+        t["xi"] = xi_desde_unitario(familia, etapa, t["u"])
+    return tareas
 
 
 def plan_de_tareas(familia, etapa, n_total, fraccion_refinado=0.05):
