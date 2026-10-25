@@ -368,6 +368,21 @@ def ejecutar_test():
     with open(os.path.join(C.DIR_SALIDA, "test_resumen.json"), "w") as fh:
         json.dump(resumen, fh, indent=1, default=float)
     print("\nResumen escrito en test_resumen.json")
+
+    # Evidencia del ensayo para `remote_cli smoke record`: solo se escribe si los cuatro
+    # nominales resolvieron en todas las plataformas medidas. Un ensayo fallido no deja
+    # shard.json, y sin el no hay veredicto "pass".
+    fallos = [f"{pl}-{fam}" for (pl, fam), r in ref.items() if r["estado"] != "ok"]
+    if fallos:
+        print(f"ENSAYO FALLIDO: nominales sin estado ok: {fallos}. No se escribe shard.json.")
+    else:
+        stamp = {"evidence": {"commit": os.environ.get("FORGE_CLONE_COMMIT"),
+                              "nominalesOk": sorted(f"{pl}-{fam}" for pl, fam in ref)},
+                 "environment": {"cpus": os.cpu_count(), "gpus": ng},
+                 "test": resumen}
+        with open(os.path.join(C.DIR_SALIDA, "shard.json"), "w") as fh:
+            json.dump(stamp, fh, indent=1, default=float)
+        print("Ensayo correcto: shard.json escrito.")
     return resumen
 
 
