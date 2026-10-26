@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dataset ∂PV r04</title>
+<style>
+:root {
+  --color-bg: #f6f7f9; --color-panel: #ffffff; --color-fg: #1b2230; --color-fg-muted: #5d6676;
+  --color-border-line: #dde1e8; --color-ok: #1f7a4d; --color-warn: #a06a00; --color-bad: #c0392b;
+  --s1: #2f6fb3; --s2: #d07a1f; --s3: #3a9a6a; --s4: #8a5cc2; --s5: #c04f7a; --s6: #5a8f9e; --s7: #a3843a; --s8: #6b6f80;
+  --cds-chart-status-critical: #c0392b; --cds-chart-grid: #e8ebf0; --cds-chart-axis: #b9c0cc; --cds-chart-muted: #b9c0cc;
+  --cds-surface-popover: #ffffff; --cds-border: #d3d8e0; --cds-shadow-popover: 0 4px 16px rgba(20, 30, 50, .14);
+  --cds-text-secondary: #5d6676;
+  --font-anthropic-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-anthropic-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cds-font-size-caption: .78rem; --cds-font-size-body: .9rem; --cds-font-size-heading: 1.02rem; --cds-font-size-title: 1.9rem;
+  --cds-font-weight-medium: 600; --cds-radius: 8px;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 14px; --cds-gap-lg: 20px; --cds-gap-xl: 30px;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 16px;
+  --cds-dur-slow: .3s;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #12161d; --color-panel: #1a2029; --color-fg: #e6e9ee; --color-fg-muted: #9aa3b2;
+    --color-border-line: #2b3340; --color-ok: #4cc38a; --color-warn: #e0a73a; --color-bad: #ef6b5b;
+    --s1: #6aa5e8; --s2: #f0a050; --s3: #5cc28f; --s4: #b08ae6; --s5: #e57ba3; --s6: #7fb6c4; --s7: #cfb064; --s8: #9aa0b4;
+    --cds-chart-status-critical: #ef6b5b; --cds-chart-grid: #252c37; --cds-chart-axis: #3d4655; --cds-chart-muted: #4a5466;
+    --cds-surface-popover: #222935; --cds-border: #3a4352; --cds-shadow-popover: 0 4px 16px rgba(0, 0, 0, .45);
+    --cds-text-secondary: #9aa3b2; color-scheme: dark;
+  }
+}
+html, body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 15px; }
+#dash-root { max-width: 1400px; margin-inline: auto; padding: 28px max(16px, 3vw) 48px; }
+.dash-skeleton { color: transparent !important; background: var(--color-border-line); border-radius: 4px; }
+</style>
+<script src="d3.min.js"></script>
+<script>
+// Sustituto local del API `dash` del tablero: lee los archivos de datos/ y redibuja.
+window.dash = (() => {
+  const fuentes = {
+    familias: ['datos/familias.json', 'json'], dispositivos: ['datos/dispositivos.csv', 'csv'],
+    curvas: ['datos/curvas_jv.csv', 'csv'], perfiles: ['datos/perfiles_phi.csv', 'csv'],
+    parametros: ['datos/parametros.csv', 'csv'], bloques: ['datos/bloques.csv', 'csv'],
+  };
+  const store = {}, calcs = {}, fns = [];
+  const run = () => fns.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
+  Object.entries(fuentes).forEach(([id, [url, fmt]]) => {
+    store[id] = { status: 'loading', data: [] };
+    (fmt === 'json' ? d3.json(url) : d3.csv(url))
+      .then((rows) => { store[id] = { status: 'ok', data: rows, columns: rows.columns || Object.keys(rows[0] || {}) }; run(); })
+      .catch((e) => { store[id] = { status: 'error', data: [], message: String(e) }; run(); });
+  });
+  let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(run, 150); });
+  return {
+    colors: ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8'].map((v) => `var(${v})`),
+    calc(id, spec) { calcs[id] = spec; },
+    data(id) {
+      if (calcs[id]) {
+        const ins = calcs[id].inputs.map((i) => store[i]);
+        if (ins.some((d) => d.status === 'error')) return { status: 'error', data: [] };
+        if (!ins.every((d) => d.status === 'ok')) return { status: 'loading', data: [] };
+        return { status: 'ok', data: calcs[id].fn(...ins.map((d) => d.data)) };
+      }
+      return store[id] || { status: 'missing', data: [] };
+    },
+    onData(fn) { fns.push(fn); try { fn(); } catch (e) { console.error(e); } },
+  };
+})();
+</script>
+</head>
+<body>
+<div id="dash-root">
+<style>
+.dv { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); }
+.dv-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.dv-head p { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); max-width: 70ch; }
+.dv-head b, .dv b { font-weight: 600; }
+.dv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: var(--cds-gap-md); }
+.dv-kpi { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+.dv-kpi .lbl { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dv-kpi .num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+.dv-kpi .sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dv-sec { display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+.dv-sec > h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.dv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--cds-gap-md); }
+.dv-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-sm); min-width: 0; position: relative; }
+.dv-card h3 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.dv-card .note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; }
+.dv-chart { min-height: 220px; position: relative; }
+.dv-chart.tall { min-height: 320px; }
+.dv-chart svg text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+.dv-chart .grid line { stroke: var(--cds-chart-grid); }
+.dv-chart .axis path, .dv-chart .axis line { stroke: var(--cds-chart-axis); }
+.dv-multi { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: var(--cds-gap-md); }
+.dv-multi .panel { min-height: 150px; }
+.dv-multi .panel h4 { margin: 0 0 var(--cds-gap-xs); font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); }
+.dv-ctrl { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm) var(--cds-gap-md); align-items: center; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dv-ctrl label { display: flex; gap: var(--cds-gap-xs); align-items: center; }
+.dv-ctrl select { font: inherit; color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 2px 6px; }
+.dv-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dv-legend span::before { content: ""; display: inline-block; width: .6rem; height: .6rem; border-radius: 2px; margin-right: 4px; background: var(--sw); vertical-align: -1px; }
+.dv-tablebox { overflow: auto; max-height: 26rem; }
+.dv table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.dv th, .dv td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.dv th { position: sticky; top: 0; background: var(--color-panel); color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
+.dv th:first-child, .dv td:first-child, .dv td.txt, .dv th.txt { text-align: left; }
+.dv td.wrap { white-space: normal; min-width: 16rem; text-align: left; }
+.dv .bad { color: var(--color-bad); }
+.dv .okc { color: var(--color-ok); }
+.dv-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); z-index: 3; max-width: 16rem; }
+.dv-tip .t { color: var(--cds-text-secondary); }
+[data-dash-source-state=empty] { color: transparent; }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+.dv-fail { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: inherit; height: 100%; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.dv-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+</style>
+
+<div class="dv">
+  <header class="dv-head" id="resumen">
+    <h1>Dataset ∂PV r04</h1>
+    <p id="takeaway"><span class="dash-skeleton" data-source="totales" data-field="ok">—</span> dispositivos útiles de
+      <span class="dash-skeleton" data-source="totales" data-field="simulados">—</span> simulados con ∂PV en las cuatro familias y dos etapas de r04.
+      Solo E3B tiene fallos de Newton: <span class="dash-skeleton" data-source="familias" data-field="tasa_fallo" data-where="fe=E3B">—</span> de sus dispositivos.</p>
+  </header>
+
+  <section class="dv-kpis" id="cifras">
+    <div class="dv-kpi"><span class="lbl">Dispositivos útiles</span><span class="num dash-skeleton" data-source="totales" data-field="ok">—</span><span class="sub">Sobol con estado ok</span></div>
+    <div class="dv-kpi"><span class="lbl">Fallos de Newton</span><span class="num dash-skeleton" data-source="totales" data-field="fallos">—</span><span class="sub">todos en E3B</span></div>
+    <div class="dv-kpi"><span class="lbl">Esquinas del hipercubo</span><span class="num dash-skeleton" data-source="totales" data-field="esquinas">—</span><span class="sub">prueba de extrapolación (H4)</span></div>
+    <div class="dv-kpi"><span class="lbl">Re-simulados con 4× nodos</span><span class="num dash-skeleton" data-source="totales" data-field="refinados">—</span><span class="sub">piso de la Ec. 21</span></div>
+    <div class="dv-kpi"><span class="lbl">Tamaño en disco</span><span class="num dash-skeleton" data-source="totales" data-field="gb">—</span><span class="sub">GB en 20 archivos .h5</span></div>
+  </section>
+
+  <section class="dv-sec" id="cobertura">
+    <h2>Cobertura por familia y etapa</h2>
+    <div class="dv-grid">
+      <div class="dv-card" id="card-fallos">
+        <h3>Dispositivos simulados</h3>
+        <p class="note">Sobol por familia-etapa: ok y fallos de Newton. Etapa A barre dopajes (y η<sub>PL</sub> en E4); etapa B suma espesores.</p>
+        <div class="dv-legend"><span style="--sw: var(--color-fg-muted)" id="lg-ok">ok</span><span style="--sw: var(--cds-chart-status-critical)">fallo de Newton</span></div>
+        <div class="dv-chart" id="ch-fallos" data-source="familias"></div>
+      </div>
+      <div class="dv-card" id="card-piso">
+        <h3>Piso de discretización</h3>
+        <p class="note">Percentil 95 de |ΔPCE| entre la malla base y 4× nodos, en puntos porcentuales (Ec. 21). E2 y E4 usan la malla graduada de 180 nodos.</p>
+        <div class="dv-chart" id="ch-piso" data-source="familias"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="dv-sec" id="pce">
+    <h2>Distribución de la PCE</h2>
+    <p class="note" style="margin:0">Histogramas de la PCE de los dispositivos ok, en la misma escala para comparar familias.</p>
+    <div class="dv-multi" id="ch-histos" data-source="dispositivos"></div>
+  </section>
+
+  <section class="dv-sec" id="explorador">
+    <h2>Explorador por familia-etapa</h2>
+    <div class="dv-ctrl">
+      <label for="sel-fe">Familia-etapa <select id="sel-fe"></select></label>
+      <label for="sel-par">Parámetro <select id="sel-par"></select></label>
+      <label for="sel-met">Métrica <select id="sel-met">
+        <option value="pce">PCE (%)</option><option value="voc">V<sub>oc</sub> (V)</option>
+        <option value="jsc">J<sub>sc</sub> (mA/cm²)</option><option value="ff">FF (%)</option></select></label>
+    </div>
+    <div class="dv-grid">
+      <div class="dv-card" id="card-scatter">
+        <h3 id="tt-scatter">Métrica frente al parámetro</h3>
+        <p class="note">Cada punto es un dispositivo. Los fallos se marcan en rojo sobre el eje inferior, en su valor del parámetro.</p>
+        <div class="dv-chart tall" id="ch-scatter" data-source="dispositivos parametros"></div>
+      </div>
+      <div class="dv-card" id="card-jv">
+        <h3>Curvas J–V de muestra</h3>
+        <p class="note">Barrido de ∂PV en pasos de 0,05 V hasta que la corriente cambia de signo. Fotocorriente positiva.</p>
+        <div class="dv-chart tall" id="ch-jv" data-source="curvas"></div>
+      </div>
+      <div class="dv-card" id="card-phi">
+        <h3>Potencial de equilibrio φ<sub>eq</sub></h3>
+        <p class="note">Perfiles adimensionales (unidades de V<sub>th</sub>) sobre la malla de ∂PV, el estado que aprende la PINN.</p>
+        <div class="dv-chart tall" id="ch-phi" data-source="perfiles"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="dv-sec" id="tabla-familias">
+    <h2>Resumen numérico</h2>
+    <div class="dv-card">
+      <h3>Por familia-etapa</h3>
+      <p class="note">Percentiles de la PCE y medianas de V<sub>oc</sub>, J<sub>sc</sub> y FF sobre los dispositivos ok.</p>
+      <div class="dv-tablebox">
+        <table id="tb-familias" data-source="familias" data-row-key="fe">
+          <thead><tr>
+            <th data-field="fe">Familia-etapa</th><th class="txt" data-field="descripcion">Dispositivo</th>
+            <th data-field="d">d<sub>ξ</sub></th><th data-field="ok">ok</th><th data-field="fallos">Fallos</th>
+            <th data-field="tasa_fallo">Tasa de fallo</th><th data-field="esquinas_ok">Esquinas ok</th>
+            <th data-field="esquinas_fallo">Esquinas fallo</th>
+            <th data-field="pce_p5">PCE p5</th><th data-field="pce_p50">PCE p50</th><th data-field="pce_p95">PCE p95</th>
+            <th data-field="voc_p50">V<sub>oc</sub> (V)</th><th data-field="jsc_p50">J<sub>sc</sub> (mA/cm²)</th><th data-field="ff_p50">FF (%)</th>
+            <th data-field="piso_q95_pp">Piso Q95 (pp)</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dv-grid">
+      <div class="dv-card" id="card-param">
+        <h3>Rangos de ξ</h3>
+        <p class="note">Los rangos de r04 §7 con que se muestreó cada familia-etapa, y su fuente.</p>
+        <div class="dv-tablebox">
+          <table id="tb-param" data-source="parametros" data-row-key="fe,orden">
+            <thead><tr>
+              <th data-field="fe">Familia-etapa</th><th data-field="orden">#</th><th class="txt" data-field="nombre">Parámetro</th>
+              <th class="txt" data-field="escala">Escala</th><th data-field="min">Mín</th><th data-field="max">Máx</th>
+              <th data-field="nominal">Nominal</th><th class="txt" data-field="fuente">Fuente</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="dv-card" id="card-bloques">
+        <h3>Bloques producidos</h3>
+        <p class="note">Bloques Sobol de 1024 por sesión de Kaggle. Las sesiones futuras suman b002 en adelante en E1 y E3, y b003 en adelante en E2 y E4.</p>
+        <div class="dv-tablebox">
+          <table id="tb-bloques" data-source="bloques" data-row-key="fe,bloque">
+            <thead><tr>
+              <th data-field="fe">Familia-etapa</th><th data-field="bloque">Bloque</th><th class="txt" data-field="sesion">Sesión</th>
+              <th class="txt" data-field="completo">Completo</th><th data-field="ok">ok</th><th data-field="fallos">Fallos</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+dash.calc('totales', {
+  inputs: ['familias'],
+  title: 'Totales del dataset',
+  description: 'Suma de las ocho familias-etapa: dispositivos ok, fallos, esquinas, refinados y tamaño.',
+  fn: (familias) => {
+    const s = (k) => familias.reduce((a, r) => a + Number(r[k]), 0);
+    return [{
+      simulados: s('simulados'), ok: s('ok'), fallos: s('fallos'),
+      esquinas: s('esquinas_ok') + s('esquinas_fallo'), refinados: s('refinados'),
+      gb: Math.round(s('mb') / 100) / 10,
+    }];
+  },
+});
+</script>
+
+<script>
+(() => {
+  const loc = d3.formatLocale({ decimal: ',', thousands: '.', grouping: [3], currency: ['', ''] });
+  const fInt = loc.format(',d');
+  const fPct1 = loc.format('.1%');
+  const fNum = (d) => loc.format(',.2~f')(d);
+  const fSci = (v) => { const e = Math.floor(Math.log10(Math.abs(v))); const m = v / 10 ** e; return `${loc.format('.2~f')(m)}e${e}`; };
+  const fVal = (v) => (!isFinite(v) ? '' : (Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-2 && v !== 0)) ? fSci(v) : fNum(v));
+  const metricas = { pce: 'PCE (%)', voc: 'Voc (V)', jsc: 'Jsc (mA/cm²)', ff: 'FF (%)' };
+  const state = { fe: 'E3B', par: 1, met: 'pce' };
+  const css = (name) => getComputedStyle(document.querySelector('.dv')).getPropertyValue(name).trim();
+  const crit = () => css('--cds-chart-status-critical') || 'crimson';
+  const num = (x) => (x === '' || x == null ? NaN : Number(x));
+
+  const fail = (el) => { el.replaceChildren(); const d = document.createElement('div'); d.className = 'dv-fail'; d.textContent = 'Failed to load'; el.append(d); };
+  const statusOf = (...ids) => {
+    const st = ids.map((id) => dash.data(id).status);
+    if (st.some((s) => s === 'error' || s === 'connect' || s === 'declined' || s === 'missing')) return 'error';
+    if (st.every((s) => s === 'ok')) return 'ok';
+    return 'loading';
+  };
+
+  function tipFor(card) {
+    let t = card.querySelector('.dv-tip');
+    if (!t) { t = document.createElement('div'); t.className = 'dv-tip'; t.hidden = true; card.append(t); }
+    return t;
+  }
+  function showTip(card, event, lines) {
+    const t = tipFor(card);
+    t.replaceChildren(...lines.map((l, i) => { const d = document.createElement('div'); if (i === 0) d.className = 't'; d.textContent = l; return d; }));
+    t.hidden = false;
+    const r = card.getBoundingClientRect();
+    let x = event.clientX - r.left + 12, y = event.clientY - r.top + 12;
+    const w = t.offsetWidth, h = t.offsetHeight;
+    if (x + w > r.width - 4) x = event.clientX - r.left - w - 12;
+    if (y + h > r.height - 4) y = event.clientY - r.top - h - 12;
+    t.style.left = `${Math.max(4, x)}px`; t.style.top = `${Math.max(4, y)}px`;
+  }
+  const hideTip = (card) => { const t = card.querySelector('.dv-tip'); if (t) t.hidden = true; };
+  const cleanAxis = (g) => g.attr('font-size', null).attr('font-family', null);
+  const textW = (svg, s) => { const t = svg.append('text').text(s); const w = t.node().getComputedTextLength(); t.remove(); return w; };
+
+  // ---------- cifras y frase ----------
+  function drawText() {
+    const tot = dash.data('totales');
+    const fam = dash.data('familias');
+    document.querySelectorAll('[data-source="totales"]').forEach((el) => {
+      if (tot.status !== 'ok' || !tot.data.length) { el.textContent = '—'; return; }
+      el.classList.remove('dash-skeleton');
+      const v = tot.data[0][el.dataset.field];
+      el.textContent = el.dataset.field === 'gb' ? loc.format(',.1f')(v) : fInt(v);
+    });
+    const e3 = document.querySelector('#takeaway [data-where="fe=E3B"]');
+    if (fam.status === 'ok') {
+      const r = fam.data.find((d) => d.fe === 'E3B');
+      e3.classList.remove('dash-skeleton');
+      e3.textContent = r ? fPct1(Number(r.tasa_fallo)) : '—';
+    } else e3.textContent = '—';
+  }
+
+  // ---------- barras de cobertura ----------
+  function drawFallos() {
+    const el = document.getElementById('ch-fallos');
+    const st = statusOf('familias');
+    if (st === 'error') return fail(el);
+    if (st !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); return; }
+    el.classList.remove('dash-skeleton'); el.replaceChildren();
+    const rows = dash.data('familias').data.map((r) => ({ fe: r.fe, ok: Number(r.ok), fallos: Number(r.fallos), desc: r.descripcion }));
+    const W = el.clientWidth || 360, rowH = 26, H = rows.length * rowH + 28;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const left = Math.max(...rows.map((r) => textW(svg, r.fe))) + 10;
+    const right = textW(svg, fInt(3072)) + 12;
+    const x = d3.scaleLinear([0, d3.max(rows, (r) => r.ok + r.fallos)], [left, W - right]).nice();
+    const y = d3.scaleBand(rows.map((r) => r.fe), [0, rows.length * rowH]).padding(0.28);
+    svg.append('g').attr('class', 'grid').attr('transform', `translate(0,${rows.length * rowH})`)
+      .call((g) => cleanAxis(g.call(d3.axisBottom(x).ticks(Math.max(2, Math.floor((W - left - right) / 70))).tickSize(-rows.length * rowH).tickFormat(fInt))))
+      .call((g) => g.select('.domain').remove());
+    const card = document.getElementById('card-fallos');
+    const g = svg.append('g');
+    g.selectAll('rect.ok').data(rows).join('rect').attr('class', 'ok')
+      .attr('x', x(0)).attr('y', (d) => y(d.fe)).attr('height', y.bandwidth()).attr('rx', 4)
+      .attr('width', (d) => x(d.ok) - x(0)).style('fill', dash.colors[0]);
+    g.selectAll('rect.fa').data(rows.filter((r) => r.fallos > 0)).join('rect').attr('class', 'fa')
+      .attr('x', (d) => x(d.ok)).attr('y', (d) => y(d.fe)).attr('height', y.bandwidth()).attr('rx', 4)
+      .attr('width', (d) => x(d.ok + d.fallos) - x(d.ok)).style('fill', crit());
+    svg.append('g').selectAll('text').data(rows).join('text').attr('x', left - 8).attr('y', (d) => y(d.fe) + y.bandwidth() / 2)
+      .attr('dy', '0.35em').attr('text-anchor', 'end').text((d) => d.fe);
+    svg.append('g').selectAll('text').data(rows).join('text').attr('x', (d) => x(d.ok + d.fallos) + 6)
+      .attr('y', (d) => y(d.fe) + y.bandwidth() / 2).attr('dy', '0.35em').text((d) => fInt(d.ok + d.fallos));
+    svg.append('g').selectAll('rect').data(rows).join('rect').attr('x', 0).attr('width', W).attr('y', (d) => y(d.fe) - 4)
+      .attr('height', y.bandwidth() + 8).style('fill', 'transparent')
+      .on('mousemove', (ev, d) => showTip(card, ev, [`${d.fe} · ${d.desc}`, `ok: ${fInt(d.ok)}`, `fallos de Newton: ${fInt(d.fallos)} (${fPct1(d.fallos / (d.ok + d.fallos))})`]))
+      .on('mouseleave', () => hideTip(card));
+    document.getElementById('lg-ok').style.setProperty('--sw', dash.colors[0]);
+  }
+
+  // ---------- piso de discretizacion ----------
+  function drawPiso() {
+    const el = document.getElementById('ch-piso');
+    const st = statusOf('familias');
+    if (st === 'error') return fail(el);
+    if (st !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); return; }
+    el.classList.remove('dash-skeleton'); el.replaceChildren();
+    const rows = dash.data('familias').data.map((r) => ({ fe: r.fe, v: num(r.piso_q95_pp), n: Number(r.refinados) })).filter((r) => isFinite(r.v));
+    const W = el.clientWidth || 360, rowH = 26, H = rows.length * rowH + 28;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const left = Math.max(...rows.map((r) => textW(svg, r.fe))) + 10;
+    const right = textW(svg, '0,48 pp') + 12;
+    const x = d3.scaleLinear([0, d3.max(rows, (r) => r.v)], [left, W - right]).nice();
+    const y = d3.scaleBand(rows.map((r) => r.fe), [0, rows.length * rowH]).padding(0.28);
+    svg.append('g').attr('class', 'grid').attr('transform', `translate(0,${rows.length * rowH})`)
+      .call((g) => cleanAxis(g.call(d3.axisBottom(x).ticks(Math.max(2, Math.floor((W - left - right) / 70))).tickSize(-rows.length * rowH).tickFormat(loc.format('.2~f')))))
+      .call((g) => g.select('.domain').remove());
+    const card = document.getElementById('card-piso');
+    const graded = (fe) => fe.startsWith('E2') || fe.startsWith('E4');
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', x(0)).attr('y', (d) => y(d.fe)).attr('height', y.bandwidth()).attr('rx', 4)
+      .attr('width', (d) => Math.max(1, x(d.v) - x(0)))
+      .style('fill', (d) => (graded(d.fe) ? dash.colors[1] : dash.colors[0]))
+      .on('mousemove', (ev, d) => showTip(card, ev, [d.fe, `Q95 |ΔPCE| = ${loc.format('.3~f')(d.v)} pp`, `${fInt(d.n)} dispositivos re-simulados`, graded(d.fe) ? 'malla graduada de ex2 (180 nodos)' : 'malla uniforme de 500 nodos']))
+      .on('mouseleave', () => hideTip(card));
+    svg.append('g').selectAll('text').data(rows).join('text').attr('x', left - 8).attr('y', (d) => y(d.fe) + y.bandwidth() / 2)
+      .attr('dy', '0.35em').attr('text-anchor', 'end').text((d) => d.fe);
+    svg.append('g').selectAll('text').data(rows).join('text').attr('x', (d) => x(d.v) + 6)
+      .attr('y', (d) => y(d.fe) + y.bandwidth() / 2).attr('dy', '0.35em').text((d) => `${loc.format('.2~f')(d.v)} pp`);
+  }
+
+  // ---------- histogramas de PCE ----------
+  function drawHistos() {
+    const el = document.getElementById('ch-histos');
+    const st = statusOf('dispositivos');
+    if (st === 'error') return fail(el);
+    if (st !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); el.style.minHeight = '320px'; return; }
+    el.classList.remove('dash-skeleton'); el.style.minHeight = ''; el.replaceChildren();
+    const rows = dash.data('dispositivos').data.filter((r) => r.estado === 'ok').map((r) => ({ fe: r.fe, v: Number(r.pce) }));
+    const groups = d3.group(rows, (r) => r.fe);
+    const xmax = Math.ceil(d3.max(rows, (r) => r.v));
+    const bins = d3.bin().domain([0, xmax]).thresholds(d3.range(0, xmax + 0.5, 0.5));
+    const binned = new Map([...groups].map(([fe, rs]) => [fe, bins(rs.map((r) => r.v))]));
+    const ymax = d3.max([...binned.values()].flat(), (b) => b.length);
+    [...binned.keys()].sort().forEach((fe) => {
+      const p = document.createElement('div'); p.className = 'panel';
+      const h = document.createElement('h4'); h.textContent = `${fe} · ${fInt(groups.get(fe).length)} ok`; p.append(h);
+      el.append(p);
+      const W = p.clientWidth || 240, H = 120, mb = 20, ml = 4;
+      const svg = d3.select(p).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+      const x = d3.scaleLinear([0, xmax], [ml, W - 8]);
+      const y = d3.scaleLinear([0, ymax], [H - mb, 6]);
+      svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - mb})`)
+        .call((g) => cleanAxis(g.call(d3.axisBottom(x).ticks(5).tickFormat((d) => `${d}%`))));
+      const card = el.closest('.dv-sec');
+      card.style.position = 'relative';
+      svg.append('g').selectAll('rect').data(binned.get(fe)).join('rect')
+        .attr('x', (b) => x(b.x0) + 0.5).attr('width', (b) => Math.max(0, x(b.x1) - x(b.x0) - 1))
+        .attr('y', (b) => y(b.length)).attr('height', (b) => y(0) - y(b.length)).attr('rx', 1.5)
+        .style('fill', dash.colors[0])
+        .on('mousemove', (ev, b) => showTip(card, ev, [`${fe} · PCE ${loc.format('.1f')(b.x0)}–${loc.format('.1f')(b.x1)} %`, `${fInt(b.length)} dispositivos`]))
+        .on('mouseleave', () => hideTip(card));
+    });
+  }
+
+  // ---------- controles ----------
+  const selFe = document.getElementById('sel-fe');
+  const selPar = document.getElementById('sel-par');
+  const selMet = document.getElementById('sel-met');
+  selFe.addEventListener('change', () => { state.fe = selFe.value; state.par = 1; redrawExplorer(); });
+  selPar.addEventListener('change', () => { state.par = Number(selPar.value); redrawExplorer(); });
+  selMet.addEventListener('change', () => { state.met = selMet.value; redrawExplorer(); });
+  function fillControls() {
+    const fam = dash.data('familias'), par = dash.data('parametros');
+    if (fam.status === 'ok') {
+      const fes = fam.data.map((r) => r.fe);
+      if (selFe.options.length !== fes.length) selFe.replaceChildren(...fes.map((fe) => new Option(fe, fe)));
+      selFe.value = state.fe;
+    }
+    if (par.status === 'ok') {
+      const ps = par.data.filter((r) => r.fe === state.fe);
+      selPar.replaceChildren(...ps.map((r) => new Option(r.nombre, r.orden)));
+      selPar.value = String(state.par);
+    }
+    selMet.value = state.met;
+  }
+
+  // ---------- dispersion ----------
+  function drawScatter() {
+    const el = document.getElementById('ch-scatter');
+    const st = statusOf('dispositivos', 'parametros');
+    if (st === 'error') return fail(el);
+    if (st !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); return; }
+    el.classList.remove('dash-skeleton'); el.replaceChildren();
+    const pr = dash.data('parametros').data.find((r) => r.fe === state.fe && Number(r.orden) === state.par);
+    if (!pr) return;
+    document.getElementById('tt-scatter').textContent = `${metricas[state.met]} frente a ${pr.nombre} · ${state.fe}`;
+    const all = dash.data('dispositivos').data.filter((r) => r.fe === state.fe);
+    const key = `p${state.par}`;
+    const ok = all.filter((r) => r.estado === 'ok').map((r) => ({ x: num(r[key]), y: num(r[state.met]), r }));
+    const bad = all.filter((r) => r.estado !== 'ok').map((r) => ({ x: num(r[key]), r }));
+    const W = el.clientWidth || 360, H = 300;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const lo = Number(pr.min), hi = Number(pr.max);
+    const x = (pr.escala === 'log' ? d3.scaleLog([lo, hi], [0, 1]) : d3.scaleLinear([lo, hi], [0, 1]));
+    const y = d3.scaleLinear(d3.extent(ok, (d) => d.y), [H - 34, 8]).nice();
+    const yTicks = y.ticks(5);
+    const ml = Math.max(...yTicks.map((t) => textW(svg, loc.format('~f')(t)))) + 10;
+    x.range([ml, W - 10]);
+    const xt = pr.escala === 'log' ? x.ticks(4) : x.ticks(Math.max(3, Math.floor((W - ml) / 80)));
+    svg.append('g').attr('class', 'grid').attr('transform', `translate(${ml},0)`)
+      .call((g) => cleanAxis(g.call(d3.axisLeft(y).ticks(5).tickSize(-(W - ml - 10)).tickFormat(loc.format('~f')))))
+      .call((g) => g.select('.domain').remove());
+    const xFmt = (v) => (pr.escala === 'log' ? fSci(v) : (pr.nombre.startsWith('L_') ? `${loc.format('~f')(Math.round(v * 1e7))} nm` : loc.format('.2~f')(v)));
+    const logT = pr.escala === 'log' ? xt.filter((t) => Math.abs(Math.log10(t) - Math.round(Math.log10(t))) < 1e-9) : xt;
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - 34})`)
+      .call((g) => cleanAxis(g.call(d3.axisBottom(x).tickValues(logT.length >= 2 ? logT : xt).tickFormat(xFmt))));
+    const card = document.getElementById('card-scatter');
+    const c0 = dash.colors[0];
+    svg.append('g').selectAll('circle').data(ok).join('circle')
+      .attr('cx', (d) => x(d.x)).attr('cy', (d) => y(d.y)).attr('r', 2.2)
+      .style('fill', c0).style('fill-opacity', 0.45);
+    svg.append('g').selectAll('line').data(bad).join('line')
+      .attr('x1', (d) => x(d.x)).attr('x2', (d) => x(d.x)).attr('y1', H - 34).attr('y2', H - 46)
+      .style('stroke', crit()).style('stroke-width', 1.5);
+    const pts = ok.map((d) => [x(d.x), y(d.y), d]);
+    const dl = d3.Delaunay.from(pts, (p) => p[0], (p) => p[1]);
+    const hi1 = svg.append('circle').attr('r', 4.5).style('fill', c0).style('stroke', 'var(--color-bg)').attr('visibility', 'hidden');
+    svg.append('rect').attr('x', ml).attr('y', 0).attr('width', W - ml).attr('height', H - 34).style('fill', 'transparent')
+      .on('mousemove', (ev) => {
+        const [mx, my] = d3.pointer(ev);
+        const i = dl.find(mx, my); if (i == null || i < 0) return;
+        const [px, py, d] = pts[i];
+        hi1.attr('cx', px).attr('cy', py).attr('visibility', 'visible');
+        const r = d.r;
+        showTip(card, ev, [`${state.fe} · ${pr.nombre} = ${xFmt(d.x)}`, `PCE ${loc.format('.2f')(Number(r.pce))} %`, `Voc ${loc.format('.3f')(Number(r.voc))} V · Jsc ${loc.format('.2f')(Number(r.jsc))} mA/cm²`, `FF ${loc.format('.1f')(Number(r.ff))} %`]);
+      })
+      .on('mouseleave', () => { hi1.attr('visibility', 'hidden'); hideTip(card); });
+    if (bad.length) {
+      svg.append('text').attr('x', W - 10).attr('y', H - 50).attr('text-anchor', 'end').style('fill', crit())
+        .text(`${fInt(bad.length)} fallos de Newton`);
+    }
+  }
+
+  // ---------- lineas (J-V y phi) ----------
+  function drawLines(elId, cardId, dsId, xKey, yKey, idKey, xLabel, yLabel) {
+    const el = document.getElementById(elId);
+    const st = statusOf(dsId);
+    if (st === 'error') return fail(el);
+    if (st !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); return; }
+    el.classList.remove('dash-skeleton'); el.replaceChildren();
+    const rows = dash.data(dsId).data.filter((r) => r.fe === state.fe).map((r) => ({ id: r[idKey], x: Number(r[xKey]), y: Number(r[yKey]), pce: Number(r.pce) }));
+    const series = d3.groups(rows, (r) => r.id);
+    if (!series.length) { const n = document.createElement('p'); n.className = 'note'; n.textContent = 'Sin curvas de muestra para esta familia-etapa.'; el.append(n); return; }
+    const W = el.clientWidth || 360, H = 300;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const y = d3.scaleLinear(d3.extent(rows, (r) => r.y), [H - 34, 8]).nice();
+    const ml = Math.max(...y.ticks(5).map((t) => textW(svg, loc.format('~f')(t)))) + 10;
+    const x = d3.scaleLinear(d3.extent(rows, (r) => r.x), [ml, W - 10]).nice();
+    svg.append('g').attr('class', 'grid').attr('transform', `translate(${ml},0)`)
+      .call((g) => cleanAxis(g.call(d3.axisLeft(y).ticks(5).tickSize(-(W - ml - 10)).tickFormat(loc.format('~f')))))
+      .call((g) => g.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - 34})`)
+      .call((g) => cleanAxis(g.call(d3.axisBottom(x).ticks(Math.max(3, Math.floor((W - ml) / 70))).tickFormat(loc.format('~f')))));
+    svg.append('text').attr('x', W - 10).attr('y', H - 4).attr('text-anchor', 'end').text(xLabel);
+    svg.append('text').attr('x', ml + 4).attr('y', 18).text(yLabel);
+    const line = d3.line().x((d) => x(d.x)).y((d) => y(d.y));
+    const card = document.getElementById(cardId);
+    const paths = svg.append('g').selectAll('path').data(series).join('path')
+      .attr('d', ([, pts]) => line(pts)).style('fill', 'none')
+      .style('stroke', (_, i) => dash.colors[i % dash.colors.length]).style('stroke-width', 1.6)
+      .style('stroke-linecap', 'round').style('stroke-linejoin', 'round').style('stroke-opacity', 0.85);
+    svg.append('rect').attr('x', ml).attr('y', 0).attr('width', W - ml).attr('height', H - 34).style('fill', 'transparent')
+      .on('mousemove', (ev) => {
+        const [mx, my] = d3.pointer(ev);
+        let best = null, bd = Infinity;
+        series.forEach(([id, pts], i) => pts.forEach((p) => { const dd = (x(p.x) - mx) ** 2 + (y(p.y) - my) ** 2; if (dd < bd) { bd = dd; best = { id, i, p }; } }));
+        if (!best) return;
+        paths.style('stroke-opacity', (_, i) => (i === best.i ? 1 : 0.18));
+        showTip(card, ev, [`${state.fe} · muestra ${best.id} · PCE ${loc.format('.2f')(best.p.pce)} %`, `${xLabel}: ${loc.format('.3~f')(best.p.x)}`, `${yLabel}: ${loc.format('.3~f')(best.p.y)}`]);
+      })
+      .on('mouseleave', () => { paths.style('stroke-opacity', 0.85); hideTip(card); });
+  }
+
+  // ---------- tablas ----------
+  function fillTable(id, dsId, cols, keyCols) {
+    const tb = document.querySelector(`#${id} tbody`);
+    const d = dash.data(dsId);
+    if (d.status !== 'ok') { tb.replaceChildren(); return; }
+    tb.replaceChildren(...d.data.map((r) => {
+      const tr = document.createElement('tr');
+      if (keyCols.length > 1) tr.dataset.key = keyCols.map((k) => encodeURIComponent(String(r[k]))).join(',');
+      cols.forEach(([k, fmt, cls]) => {
+        const td = document.createElement('td');
+        if (cls) td.className = cls;
+        td.textContent = fmt ? fmt(r[k], r) : String(r[k] ?? '');
+        tr.append(td);
+      });
+      return tr;
+    }));
+  }
+  const fIntS = (v) => fInt(Number(v));
+  const fF = (dp) => (v) => (v === '' || v == null ? '' : loc.format(`.${dp}f`)(Number(v)));
+  function drawTables() {
+    fillTable('tb-familias', 'familias', [
+      ['fe'], ['descripcion', null, 'txt'], ['d', fIntS], ['ok', fIntS], ['fallos', (v) => fInt(Number(v)), null],
+      ['tasa_fallo', (v) => fPct1(Number(v))], ['esquinas_ok', fIntS], ['esquinas_fallo', fIntS],
+      ['pce_p5', fF(2)], ['pce_p50', fF(2)], ['pce_p95', fF(2)], ['voc_p50', fF(3)], ['jsc_p50', fF(2)], ['ff_p50', fF(1)],
+      ['piso_q95_pp', fF(3)],
+    ], ['fe']);
+    document.querySelectorAll('#tb-familias tbody tr').forEach((tr) => { const c = tr.children[4]; if (c && c.textContent !== '0') c.classList.add('bad'); });
+    fillTable('tb-param', 'parametros', [
+      ['fe'], ['orden'], ['nombre', null, 'txt'], ['escala', null, 'txt'],
+      ['min', (v) => fVal(Number(v))], ['max', (v) => fVal(Number(v))], ['nominal', (v) => fVal(Number(v))], ['fuente', null, 'wrap'],
+    ], ['fe', 'orden']);
+    fillTable('tb-bloques', 'bloques', [
+      ['fe'], ['bloque'], ['sesion', null, 'txt'], ['completo', (v) => (v === 'True' || v === true || v === 'true' ? 'sí' : 'no'), 'txt'],
+      ['ok', fIntS], ['fallos', fIntS],
+    ], ['fe', 'bloque']);
+  }
+
+  function redrawExplorer() {
+    fillControls();
+    drawScatter();
+    drawLines('ch-jv', 'card-jv', 'curvas', 'V', 'J', 'curva', 'V (V)', 'J (mA/cm²)');
+    drawLines('ch-phi', 'card-phi', 'perfiles', 'x_um', 'phi', 'perfil', 'x (µm)', 'φeq (Vth)');
+  }
+
+  dash.onData(() => {
+    drawText();
+    drawFallos();
+    drawPiso();
+    drawHistos();
+    redrawExplorer();
+    drawTables();
+  });
+})();
+</script>
+
+</div>
+</body>
+</html>

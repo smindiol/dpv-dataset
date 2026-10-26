@@ -1,0 +1,28 @@
+fe,orden,nombre,escala,min,max,nominal,etapa_param,fuente
+E1A,1,Nd_n,log,1000000000000000.0,8e+17,1e+17,A,ex1 menos dos decadas; cota superior Nc = 8e17
+E1A,2,Na_p,log,1000000000000000.0,1e+18,1e+17,A,ex1 +- una a dos decadas; por debajo de Nv = 1.8e19
+E1B,1,Nd_n,log,1000000000000000.0,8e+17,1e+17,A,ex1 menos dos decadas; cota superior Nc = 8e17
+E1B,2,Na_p,log,1000000000000000.0,1e+18,1e+17,A,ex1 +- una a dos decadas; por debajo de Nv = 1.8e19
+E1B,3,L_n,lin,1e-05,0.0003,0.0001,B,"eleccion declarada, sin fuente (r04)"
+E1B,4,L_p,lin,1e-05,0.0003,0.0001,B,"eleccion declarada, sin fuente (r04)"
+E2A,1,Nd_CdS,log,1e+16,1e+18,1e+17,A,ex2 +- una decada; por debajo de Nc = 2.2e18
+E2A,2,Na_CdTe,log,100000000000000.0,1e+17,1000000000000000.0,A,"Metzger et al. 2019, Nat. Energy 4, 837"
+E2B,1,Nd_CdS,log,1e+16,1e+18,1e+17,A,ex2 +- una decada; por debajo de Nc = 2.2e18
+E2B,2,Na_CdTe,log,100000000000000.0,1e+17,1000000000000000.0,A,"Metzger et al. 2019, Nat. Energy 4, 837"
+E2B,3,L_CdS,lin,2.5e-06,1e-05,2.5e-06,B,lilhare2020: dispositivos de 40 a 110 nm; cota inferior el nominal de ex2
+E2B,4,L_CdTe,lin,0.0001,0.0004,0.0004,B,"Mykytyuk et al. 2012, Acta Phys. Pol. A 122, 1073"
+E3A,1,Nd_ETM,log,1e+17,6.8e+18,4.4e+18,A,cota inferior de psc.py; cota superior Nc del ETM (6.83e18)
+E3A,2,Na_HTM,log,1e+17,1.8698e+18,4.4e+17,A,cota inferior de psc.py; cota superior Nv del HTM (1.87e18)
+E3B,1,Nd_ETM,log,1e+17,6.8e+18,4.4e+18,A,cota inferior de psc.py; cota superior Nc del ETM (6.83e18)
+E3B,2,Na_HTM,log,1e+17,1.8698e+18,4.4e+17,A,cota inferior de psc.py; cota superior Nv del HTM (1.87e18)
+E3B,3,L_abs,lin,1.7e-05,6.5e-05,5e-05,B,"Perovskite Database v1.0.1, p5 a p95"
+E3B,4,L_ETL,lin,2e-06,5.5e-05,6e-06,B,"Perovskite Database v1.0.1, p5 a p95"
+E3B,5,L_HTL,lin,1.5e-06,3e-05,1e-05,B,"Perovskite Database v1.0.1, p5 a p95"
+E4A,1,Nd_CdS,log,1e+16,1e+18,1e+17,A,igual que E2
+E4A,2,Na_CdTe,log,100000000000000.0,1e+17,1000000000000000.0,A,igual que E2
+E4A,3,eta_PL,lin,0.0,0.9,0.8,A,kalytchuk2014; Solodovnyk et al. 2016 (cota 0.9)
+E4B,1,Nd_CdS,log,1e+16,1e+18,1e+17,A,igual que E2
+E4B,2,Na_CdTe,log,100000000000000.0,1e+17,1000000000000000.0,A,igual que E2
+E4B,3,eta_PL,lin,0.0,0.9,0.8,A,kalytchuk2014; Solodovnyk et al. 2016 (cota 0.9)
+E4B,4,L_CdS,lin,2.5e-06,1e-05,2.5e-06,B,igual que E2
+E4B,5,L_CdTe,lin,0.0001,0.0004,0.0004,B,igual que E2
