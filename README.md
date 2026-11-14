@@ -44,8 +44,8 @@ and J_sc; `tools/html_barrido.py` renders `analysis/barrido-cruces.html`. Findin
 (Spearman 0.90) and anti-correlated with PCE (-0.86); perovskite (psc.py) and GaAs are dropped (short L_D, low PCE,
 frequent Newton failures).
 
-Generation (`dpvgen/generacion_b.py`, notebooks `dataset/Notebooks/gen_b_<material>.ipynb`, Kaggle CPU): InP, E1gen,
-CdTe and Si, uniform Sobol over each material's box (log10-uniform for tau, mobility factor and dopings) with points
-outside L_n / L_D <= 0.5 rejected. Every device is stored with its state, PCE, kappa_0 and the flag `cumple`
-(PCE >= 17 % and kappa_0 <= 0.15); N per material (1200, 1200, 1600, 2400) is sized from the sweep's pass rate so at
-least 1000 meet it.
+Generation (`dpvgen/generacion_b.py`, entry `src/dpvb_kaggle.py`, Kaggle CPU, progress streamed live): InP, CdTe
+and Si at their own Eg, and the generic E1 material with Eg in [1.3, 1.7] eV; uniform Sobol over each box
+(log10-uniform for tau, mobility factor and dopings) with points outside L_n / L_D <= 0.5 rejected. 500 devices per
+material; a failed simulation is replaced by the next feasible Sobol point, at most 100 replacements. kappa_0 is not
+computed here (the box keeps it low by design); filtering happens after download.
