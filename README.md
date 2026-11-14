@@ -34,3 +34,18 @@ Ejecucion: cuadernos autonomos por sesion en `dataset/Notebooks/` (`produccion_s
 o `malla4_todo` para E2/E4); cada uno clona este repositorio en un commit fijo y escribe un `.h5` por bloque.
 `visualizacion/` tiene un tablero local (`python3 -m http.server --directory visualizacion`) y los scripts que lo
 alimentan desde los `.h5`.
+
+## Dataset B (network B: design + material inputs)
+
+Screening sweep first (`dpvgen/barrido.py`, `tools/barrido_local.py`, local CPU): the E1 homojunction with 6
+absorber materials (deltapv library and examples) and 150 devices each on discrete levels of Eg, mobility, lifetime,
+dopings and thicknesses. `tools/analisis_barrido.py` adds kappa_0 = int R / int (G - R) at V = 0 from J_gen = q int G dx
+and J_sc; `tools/html_barrido.py` renders `analysis/barrido-cruces.html`. Findings: kappa_0 is ordered by L_n / L_D
+(Spearman 0.90) and anti-correlated with PCE (-0.86); perovskite (psc.py) and GaAs are dropped (short L_D, low PCE,
+frequent Newton failures).
+
+Generation (`dpvgen/generacion_b.py`, notebooks `dataset/Notebooks/gen_b_<material>.ipynb`, Kaggle CPU): InP, E1gen,
+CdTe and Si, uniform Sobol over each material's box (log10-uniform for tau, mobility factor and dopings) with points
+outside L_n / L_D <= 0.5 rejected. Every device is stored with its state, PCE, kappa_0 and the flag `cumple`
+(PCE >= 17 % and kappa_0 <= 0.15); N per material (1200, 1200, 1600, 2400) is sized from the sweep's pass rate so at
+least 1000 meet it.

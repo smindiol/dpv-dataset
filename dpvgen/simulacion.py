@@ -339,6 +339,9 @@ def construir(familia, xi, factor_malla=1):
                               Ns=[xi["Nd_ETM"], 0, -xi["Na_HTM"]],
                               Snl=1e7, Snr=1e7, Spl=1e7, Spr=1e7)
         return des, espectro_estandar()
+    if familia == "BAR":
+        from .barrido import construir_barrido
+        return construir_barrido(dpv, xi, factor_malla)
     raise ValueError(f"familia desconocida: {familia}")
 
 

@@ -1,0 +1,167 @@
+<title>Barrido de materiales ∂PV</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js"></script>
+<style>
+/* Layout: one reading column with full-width figure rows; verdict first, evidence after. */
+:root{
+  --bg:#f6f7f4; --panel:#ffffff; --fg:#1d2420; --muted:#5d6a63; --line:#d9ded8;
+  --accent:#1f6f5c; --good:#2f8a4a; --warn:#c2861c; --bad:#b8452f;
+  --display:"Fraunces",Georgia,serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141917; --panel:#1b2220; --fg:#e4ebe6; --muted:#9aa8a0; --line:#2e3834;
+  --accent:#5cc3a6; --good:#62c47e; --warn:#e3b04d; --bad:#e2775f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141917; --panel:#1b2220; --fg:#e4ebe6; --muted:#9aa8a0; --line:#2e3834;
+  --accent:#5cc3a6; --good:#62c47e; --warn:#e3b04d; --bad:#e2775f; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px}
+main{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-family:var(--display);font-size:2rem;margin:0;text-wrap:balance}
+h2{font-family:var(--display);font-size:1.3rem;margin:0 0 6px;text-wrap:balance}
+p{margin:0;max-width:72ch} .muted{color:var(--muted)}
+section{display:flex;flex-direction:column;gap:10px}
+.verdict{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.kpi b{display:block;font-family:var(--mono);font-size:1.45rem;font-variant-numeric:tabular-nums}
+.kpi span{font-size:.8rem;color:var(--muted);letter-spacing:.02em}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px}
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0}
+.fig .cap{font-size:.82rem;color:var(--muted);padding:2px 6px 6px}
+.plot{width:100%;height:400px}
+.tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:.9rem}
+th,td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left} th{font-weight:600;color:var(--muted);font-size:.8rem;letter-spacing:.03em}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:.78rem;font-weight:600}
+.g{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.w{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.b{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+ul{margin:0;padding-left:20px;max-width:80ch} li{margin:3px 0}
+code{font-family:var(--mono);font-size:.88em}
+select{font:inherit;padding:4px 8px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:4px}
+</style>
+<main>
+<header style="display:flex;flex-direction:column;gap:6px">
+  <h1>Barrido de materiales ∂PV</h1>
+  <p class="muted">Homojuntura p-n (estructura E1, contactos S = 10⁷ cm/s, AM1.5). 6 materiales × 150 dispositivos, con niveles discretos de E_g, μ, τ, N_d, N_a, L_n y L_p. κ₀ = ∫R / ∫(G−R) en V = 0, obtenido de J_gen = q∫G dx y de J_sc, sin la red.</p>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="verdict" id="verdict"></div>
+
+<section><h2>Por material</h2>
+<p class="muted">Zona útil: el porcentaje de dispositivos convergidos con κ₀ ≤ 0.15. Es el régimen donde r09 tuvo un error máximo de 18 % y donde menos del 1 % de las etapas tuvo un error de corriente mayor que 0.2 J_sc.</p>
+<div class="tw"><table id="tabla"></table></div></section>
+
+<section><h2>κ₀ decide a la vez la eficiencia y la dificultad para la red</h2>
+<div class="grid2">
+ <div class="fig"><div class="cap">PCE contra κ₀ (escala log). Las líneas marcan los umbrales del criterio: 0.15 y 0.47.</div><div class="plot" id="p_keff"></div></div>
+ <div class="fig"><div class="cap">κ₀ contra L_n/L_D. La relación espesor/longitud de difusión ordena a todos los materiales sobre una misma curva.</div><div class="plot" id="p_ldk"></div></div>
+</div></section>
+
+<section><h2>El dominio expresado como L_n/L_D</h2>
+<div class="grid2">
+ <div class="fig"><div class="cap">PCE mediana y porcentaje en zona útil por tramo de L_n/L_D.</div><div class="plot" id="p_bins"></div></div>
+ <div class="fig"><div class="cap">Correlación de Spearman entre todas las variables (solo dispositivos convergidos).</div><div class="plot" id="p_corr"></div></div>
+</div></section>
+
+<section><h2>Efecto de cada parámetro</h2>
+<p class="muted">Mediana de la PCE (eje izquierdo) y de κ₀ (eje derecho, log) por nivel. Promedia sobre todo lo demás, así que se lee como un efecto marginal.</p>
+<div class="grid2" id="niveles"></div></section>
+
+<section><h2>Cruces de a pares</h2>
+<p><label for="selH">Cruce:</label> <select id="selH"></select> <label for="selZ">Valor:</label>
+<select id="selZ"><option value="eff">PCE mediana (%)</option><option value="k0">κ₀ mediano</option></select></p>
+<div class="fig"><div class="plot" id="p_heat" style="height:460px"></div></div></section>
+
+<section><h2>Convergencia del solucionador</h2>
+<div class="fig"><div class="cap">Porcentaje de simulaciones convergidas por nivel. Los fallos ("Dense solver failed") se concentran en materiales, no en niveles.</div><div class="plot" id="p_conv"></div></div></section>
+</main>
+
+<script>
+const D=/*__DATA__*/null;
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const MC=["#1f6f5c","#c2861c","#7a4fa3","#b8452f","#2c7fb8","#6b8e23"];
+const col=m=>MC[D.mats.indexOf(m)%MC.length];
+function lay(extra){return Object.assign({paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",
+ font:{family:"IBM Plex Sans, sans-serif",size:12,color:css("--fg")},margin:{l:58,r:58,t:16,b:48},
+ legend:{orientation:"h",y:-0.2},xaxis:{gridcolor:css("--line"),zerolinecolor:css("--line")},
+ yaxis:{gridcolor:css("--line"),zerolinecolor:css("--line")}},extra||{})}
+const ax=(o)=>Object.assign({gridcolor:css("--line"),zerolinecolor:css("--line")},o);
+const cfg={displaylogo:false,responsive:true};
+const R=D.res;
+
+document.getElementById("kpis").innerHTML=[
+ [R.ok+" / "+R.n,"simulaciones convergidas"],[R.rho_ld_k,"ρ Spearman (L_n/L_D, κ₀)"],
+ [R.rho_k_eff,"ρ Spearman (κ₀, PCE)"],[R.util_eff+" %","PCE mediana con κ₀ ≤ 0.15"],
+ [R.prob_eff+" %","PCE mediana con κ₀ ≥ 0.47"]].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join("");
+
+const tm=Object.entries(R.top_mats).map(([k,v])=>`${k} ${v}`).join(", ");
+document.getElementById("verdict").innerHTML=`
+<h2>Lectura</h2>
+<ul>
+<li><b>Lo que manda es L_n/L_D, no L_n por sí solo.</b> El rango de Spearman entre L_n/L_D y κ₀ es ${R.rho_ld_k}. La relación entre espesor y longitud de difusión ordena a los 6 materiales sobre una misma curva, así que L_n ≤ 1.5 µm era el caso particular de E1 (L_D ≈ 1.6 µm).</li>
+<li><b>Alta eficiencia y κ₀ bajo coinciden.</b> El 10 % más eficiente (PCE ≥ ${R.top_thr} %) tiene todo L_n/L_D ≤ ${R.top_lnld_max} y κ₀ ≤ ${R.top_k_max}: ningún dispositivo de alta eficiencia cae en el régimen donde la red falla. Por material: ${tm}.</li>
+<li><b>Zona útil para la red:</b> L_n/L_D ≤ 0.5. Con L_n/L_D entre 0.5 y 1, solo la mitad queda bajo κ₀ = 0.15, así que es transición. Con L_n/L_D > 1, κ₀ cae en la zona problemática y la PCE se desploma.</li>
+<li><b>Lo que sube κ₀:</b> τ corto (10⁻⁹ s), μ bajo y la capa n gruesa, todo a través de L_D. Un N_d muy alto (10¹⁸) también lo sube. N_a y L_p casi no influyen, y E_g mueve la PCE pero apenas κ₀.</li>
+<li><b>Materiales:</b> la perovskita del ejemplo (μ = 2) y el GaAs (μ_p = 10) tienen L_D chica, κ₀ alto y además fallan mucho en convergencia. InP, E1 genérico, CdTe y Si son los candidatos.</li>
+</ul>`;
+
+{const t=document.getElementById("tabla");
+ const pill=u=>u>=70?`<span class="pill g">${u} %</span>`:u>=40?`<span class="pill w">${u} %</span>`:`<span class="pill b">${u} %</span>`;
+ t.innerHTML=`<tr><th>Material</th><th>n</th><th>Convergió</th><th>PCE mediana</th><th>PCE p90</th><th>κ₀ mediano</th><th>Zona útil</th><th>L_n/L_D mediano</th></tr>`+
+ D.tabla.map(x=>`<tr><td>${x.m}</td><td>${x.n}</td><td>${x.conv} %</td><td>${x.eff} %</td><td>${x.eff90} %</td><td>${x.k0}</td><td>${pill(x.util)}</td><td>${x.lnld}</td></tr>`).join("");}
+
+function scat(id,xk,yk,xlog,ylog,xt,yt,lines){
+ const P=D.puntos, tr=D.mats.map(m=>{const i=P.material.map((v,j)=>v===m?j:-1).filter(j=>j>=0);
+  return{type:"scattergl",mode:"markers",name:m,x:i.map(j=>P[xk][j]),y:i.map(j=>P[yk][j]),
+   marker:{size:6,color:col(m),opacity:.7},
+   text:i.map(j=>`${m}<br>E_g ${P.Eg[j]} eV · τ ${P.tau[j]} s · f_μ ${P.f_mu[j]}<br>L_n ${(P.L_n[j]*1e4).toFixed(2)} µm · L_n/L_D ${P.Ln_LD[j]}<br>κ₀ ${P.kappa0[j]} · PCE ${P.eff[j]} %`),
+   hoverinfo:"text"}});
+ const shapes=(lines||[]).map(v=>({type:"line",x0:v.x,x1:v.x,y0:0,y1:1,yref:"paper",line:{color:v.c,dash:"dash",width:1.5}}));
+ Plotly.newPlot(id,tr,lay({xaxis:ax({type:xlog?"log":"linear",title:xt}),yaxis:ax({type:ylog?"log":"linear",title:yt}),shapes}),cfg);
+}
+scat("p_keff","kappa0","eff",true,false,"κ₀","PCE (%)",[{x:.15,c:css("--good")},{x:.47,c:css("--bad")}]);
+scat("p_ldk","Ln_LD","kappa0",true,true,"L_n / L_D","κ₀",[{x:.5,c:css("--good")},{x:1,c:css("--bad")}]);
+
+{const B=D.binsLD;
+ Plotly.newPlot("p_bins",[
+  {type:"bar",name:"PCE mediana (%)",x:B.lab,y:B.eff,marker:{color:css("--accent")},text:B.n.map(n=>"n="+n),textposition:"inside"},
+  {type:"scatter",mode:"lines+markers",name:"% con κ₀ ≤ 0.15",x:B.lab,y:B.util,yaxis:"y2",line:{color:css("--warn"),width:2.5}}],
+  lay({xaxis:ax({title:"L_n / L_D"}),yaxis:ax({title:"PCE (%)"}),yaxis2:{overlaying:"y",side:"right",range:[0,105],title:"% zona útil",gridcolor:"rgba(0,0,0,0)"}}),cfg);}
+
+Plotly.newPlot("p_corr",[{type:"heatmap",z:D.corr,x:D.cols,y:D.cols,zmin:-1,zmax:1,colorscale:"RdBu",reversescale:true,
+ text:D.corr.map(r=>r.map(v=>v==null?"":v.toFixed(2))),texttemplate:"%{text}",textfont:{size:10}}],
+ lay({margin:{l:70,r:20,t:10,b:70},yaxis:{autorange:"reversed"}}),cfg);
+
+{const N={dEg:"ΔE_g (eV)",f_mu:"factor sobre μ",tau:"τ (s)",Nd_n:"N_d (cm⁻³)",Na_p:"N_a (cm⁻³)",L_n:"L_n (cm)",L_p:"L_p (cm)"};
+ const LOG={tau:1,Nd_n:1,Na_p:1,f_mu:1};
+ const host=document.getElementById("niveles");
+ for(const [k,v] of Object.entries(D.niveles)){
+  const div=document.createElement("div");div.className="fig";div.innerHTML=`<div class="cap">${N[k]}</div><div class="plot" id="nv_${k}" style="height:300px"></div>`;host.appendChild(div);
+  Plotly.newPlot("nv_"+k,[
+   {type:"scatter",mode:"lines+markers",name:"PCE",x:v.x,y:v.eff,line:{color:css("--accent"),width:2.5}},
+   {type:"scatter",mode:"lines+markers",name:"κ₀",x:v.x,y:v.k0,yaxis:"y2",line:{color:css("--bad"),width:2,dash:"dot"}}],
+   lay({margin:{l:50,r:55,t:8,b:40},showlegend:false,xaxis:ax({type:LOG[k]?"log":"linear"}),yaxis:ax({title:"PCE (%)"}),
+   yaxis2:{overlaying:"y",side:"right",type:"log",title:"κ₀",gridcolor:"rgba(0,0,0,0)"}}),cfg);}}
+
+{const sel=document.getElementById("selH"),z=document.getElementById("selZ");
+ const NM={tau:"τ",L_n:"L_n",f_mu:"factor μ",Nd_n:"N_d",Na_p:"N_a",material:"material",dEg:"ΔE_g"};
+ Object.keys(D.heats).forEach(k=>{const[a,b]=k.split("|");sel.add(new Option(`${NM[a]} × ${NM[b]}`,k))});
+ const fmt=v=>typeof v==="string"?v:(Math.abs(v)<1e-3||Math.abs(v)>=1e4?v.toExponential(0):String(v));
+ function draw(){const H=D.heats[sel.value][z.value],[a,b]=sel.value.split("|"),k0=z.value==="k0";
+  Plotly.react("p_heat",[{type:"heatmap",x:H.x.map(fmt),y:H.y.map(fmt),z:k0?H.z.map(r=>r.map(v=>v==null?null:Math.log10(v))):H.z,
+   colorscale:k0?[[0,css("--good")],[0.5,"#f2d16b"],[1,css("--bad")]]:"Viridis",
+   text:H.z.map(r=>r.map(v=>v==null?"":(k0?v.toFixed(3):v.toFixed(1)))),texttemplate:"%{text}",
+   colorbar:{title:k0?"log₁₀ κ₀":"PCE %"},hovertemplate:`${NM[a]} %{y} · ${NM[b]} %{x}<br>%{text}<extra></extra>`}],
+   lay({margin:{l:80,r:20,t:10,b:60},xaxis:ax({type:"category",title:NM[b]}),yaxis:ax({type:"category",title:NM[a]})}),cfg);}
+ sel.onchange=draw;z.onchange=draw;draw();}
+
+{const N=D.niveles,keys=Object.keys(N);
+ Plotly.newPlot("p_conv",keys.map((k,i)=>({type:"bar",name:k,x:N[k].x.map(v=>k+" "+(Math.abs(v)<1e-3||v>=1e4?v.toExponential(0):v)),y:N[k].conv,marker:{color:MC[i%MC.length]}})),
+ lay({xaxis:ax({type:"category",tickangle:-45}),yaxis:ax({title:"% convergido",range:[0,100]}),margin:{l:55,r:10,t:10,b:110},showlegend:false}),cfg);}
+</script>
